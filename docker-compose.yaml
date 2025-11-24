@@ -1,0 +1,76 @@
+services:
+  data-db:
+    image: mysql:8.0 # ìmmagine predefinita di docker per mySQL
+    container_name: data-db # nome container database per gli aerei
+    ports:
+      - "3306:3306" # mappiamo la porta dell'host (a sinistra) con la porta del container (a destra)
+    environment:
+      - MYSQL_ROOT_PASSWORD=data_root_pwd # Password
+      - MYSQL_DATABASE=data_db
+      - MYSQL_USER=data_user
+      - MYSQL_PASSWORD=data_app_pwd
+    volumes:
+      - data_db_data:/var/lib/mysql
+    networks:
+      - data-backend
+
+  user-db:
+    image: mysql:8.0
+    container_name: user-db
+    ports:
+      - "3307:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=user_root_pwd
+      - MYSQL_DATABASE=user_db
+      - MYSQL_USER=user
+      - MYSQL_PASSWORD=user_app_pwd
+    volumes:
+      - user_db_data:/var/lib/mysql
+    networks:
+      - user-backend
+
+  user-manager:
+    build: ./user_manager
+    container_name: user-manager
+    ports:
+      - "5003:5003"
+    environment:
+      - DB_HOST=user-db
+      - DB_PORT=3306
+      - DB_NAME=user_db
+      - DB_USER=user
+      - DB_PASSWORD=user_app_pwd
+      - LISTEN_PORT=5003
+    depends_on:
+      - user-db
+    networks:
+      - user-backend
+      - grpc-network
+
+  data-collector:
+    build: ./data_collector
+    container_name: data-collector
+    ports:
+      - "5002:5002"
+    environment:
+      - DB_HOST=data-db
+      - DB_PORT=3306
+      - DB_NAME=data_db
+      - DB_USER=data_user
+      - DB_PASSWORD=data_app_pwd
+      - LISTEN_PORT=5002
+    depends_on:
+      - data-db
+      - user-manager
+    networks:
+      - data-backend
+      - grpc-network
+
+networks:
+  data-backend:
+  user-backend:
+  grpc-network:
+
+volumes:
+  data_db_data:
+  user_db_data:
