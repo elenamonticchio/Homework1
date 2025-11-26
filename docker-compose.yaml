@@ -18,7 +18,7 @@ services:
     image: mysql:8.0
     container_name: user-db
     ports:
-      - "3309:3306"
+      - "3307:3306"
     environment:
       - MYSQL_ROOT_PASSWORD=user_root_pwd
       - MYSQL_DATABASE=user_db
