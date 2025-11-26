@@ -59,6 +59,8 @@ services:
       - DB_USER=data_user
       - DB_PASSWORD=data_app_pwd
       - LISTEN_PORT=5002
+      - OPEN_SKY_CLIENT_ID=elenamonticchio-api-client
+      - OPEN_SKY_CLIENT_SECRET=t23IEaB7UZMJGHMwWK96BQBGXyGO2sPz
     depends_on:
       - data-db
       - user-manager

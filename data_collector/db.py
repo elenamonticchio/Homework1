@@ -47,7 +47,7 @@ def init_db():
 
         cursor.execute(
         """ CREATE TABLE IF NOT EXISTS flights (
-                flight_id INT AUTO_INCREMENT PRIMARY KEY,
+                flight_id VARCHAR(255) PRIMARY KEY,
                 departure_airport VARCHAR(255),
                 arrival_airport VARCHAR(255),
                 date_time_arrival DATETIME,
