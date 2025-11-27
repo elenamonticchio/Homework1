@@ -43,7 +43,7 @@ def init_db():
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
-                                                 email VARCHAR(255) PRIMARY KEY,
+                email VARCHAR(255) PRIMARY KEY,
                 full_name VARCHAR(255) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -55,9 +55,7 @@ def init_db():
             """
             CREATE TABLE IF NOT EXISTS request_log (
                 request_id VARCHAR(255) PRIMARY KEY,
-                email VARCHAR(255),
-                response_json TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                response_json TEXT
                 )
             """
         )

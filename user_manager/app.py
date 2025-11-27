@@ -1,6 +1,7 @@
 import os
 from flask import Flask, request, jsonify
 from mysql.connector import Error
+import json
 
 from db import get_connection, init_db
 
@@ -12,29 +13,25 @@ def health():
 
 
 # ---------- REGISTRAZIONE UTENTE CON REQUEST-ID ----------
-
 @app.route("/users/add", methods=["POST"])
 def add_user():
-    import uuid, json
-
-    req_id = str(uuid.uuid4())
-    # req_id = "Ciao"  # <-- solo per test
-
     conn = None
 
     try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
+        body = request.get_json(silent=True) or {}
+        req_id = body.get("request_id")
+
         cursor.execute("SELECT 1 FROM request_log WHERE request_id = %s", (req_id,))
         if cursor.fetchone():
             resp = {
-                "message": "Request ID uguale → non aggiungo",
+                "message": "Request ID esistente",
                 "request_id": req_id
             }
             return jsonify(resp), 200
 
-        body = request.get_json(silent=True) or {}
         email = body.get("email")
         full_name = body.get("full_name")
 
@@ -43,13 +40,11 @@ def add_user():
                 "error": "email e full_name sono obbligatori",
                 "request_id": req_id
             }
-
             cursor.execute(
-                "INSERT INTO request_log (request_id, email, response_json) VALUES (%s, %s, %s)",
-                (req_id, email, json.dumps(resp)),
+                "INSERT INTO request_log (request_id, response_json) VALUES (%s, %s)",
+                (req_id, json.dumps(resp)),
             )
             conn.commit()
-
             return jsonify(resp), 400
 
         cursor.execute("SELECT email FROM users WHERE email = %s", (email,))
@@ -61,8 +56,8 @@ def add_user():
             }
 
             cursor.execute(
-                "INSERT INTO request_log (request_id, email, response_json) VALUES (%s, %s, %s)",
-                (req_id, email, json.dumps(resp)),
+                "INSERT INTO request_log (request_id, response_json) VALUES (%s, %s)",
+                (req_id, json.dumps(resp)),
             )
             conn.commit()
 
@@ -81,8 +76,8 @@ def add_user():
         }
 
         cursor.execute(
-            "INSERT INTO request_log (request_id, email, response_json) VALUES (%s, %s, %s)",
-            (req_id, email, json.dumps(resp)),
+            "INSERT INTO request_log (request_id, response_json) VALUES (%s, %s)",
+            (req_id, json.dumps(resp)),
         )
         conn.commit()
 
@@ -95,8 +90,6 @@ def add_user():
     finally:
         if conn:
             conn.close()
-
-
 
 
 # ---------- LISTA UTENTI ----------
@@ -135,9 +128,6 @@ def delete_user(email):
             return jsonify({"error": "Utente non trovato"}), 404
 
         cursor.execute("DELETE FROM users WHERE email = %s", (email,))
-        conn.commit()
-
-        cursor.execute("DELETE FROM request_log WHERE email = %s", (email,))
         conn.commit()
 
         return jsonify({
