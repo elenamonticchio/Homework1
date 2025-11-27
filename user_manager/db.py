@@ -3,17 +3,17 @@ import mysql.connector
 from mysql.connector import Error
 import time
 
-# Leggo i parametri dal docker-compose, ma metto anche dei DEFAULT
-DB_HOST = os.getenv("DB_HOST", "user-db")          # nome del container MySQL
-DB_PORT = int(os.getenv("DB_PORT", "3306"))        # porta interna del container
-DB_NAME = os.getenv("DB_NAME", "user_db")          # nome del database
-DB_USER = os.getenv("DB_USER", "user")             # utente MySQL
-DB_PASSWORD = os.getenv("DB_PASSWORD", "user_app_pwd")  # password dell'utente
+# Parametri (default o docker-compose)
+DB_HOST = os.getenv("DB_HOST", "user-db")
+DB_PORT = int(os.getenv("DB_PORT", "3306"))
+DB_NAME = os.getenv("DB_NAME", "user_db")
+DB_USER = os.getenv("DB_USER", "user")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "user_app_pwd")
 
 
 def get_connection():
     """
-    Ritorna una nuova connessione a MySQL usando le variabili d'ambiente.
+    Crea una connessione a MySQL.
     """
     return mysql.connector.connect(
         host=DB_HOST,
@@ -26,19 +26,20 @@ def get_connection():
 
 def init_db():
     """
-    Crea la tabella 'users' se non esiste,
-    e stampa la lista delle tabelle per verifica.
+    Crea le tabelle necessarie:
+    - users
+    - request_log
     """
     conn = None
 
-    # Attendo un attimo per sicurezza (MySQL potrebbe metterci un secondo ad avviarsi).
+    # Pausa per permettere a MySQL di avviarsi
     time.sleep(15)
 
     try:
         conn = get_connection()
         cursor = conn.cursor()
 
-        # Creazione tabella utenti
+        # Tabella utenti
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -49,11 +50,23 @@ def init_db():
             """
         )
 
+        # Tabella per idempotenza richieste
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS request_log (
+                request_id VARCHAR(255) PRIMARY KEY,
+                email VARCHAR(255),
+                response_json TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+        )
+
         conn.commit()
-        print("Tabella 'users' pronta.")
+        print("Tabelle 'users' e 'request_log' pronte.")
 
     except Error as e:
-        print(f"❌ Errore durante init_db: {e}")
+        print(f"Errore durante init_db: {e}")
 
     finally:
         if conn:
