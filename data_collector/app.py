@@ -298,6 +298,43 @@ def list_flights():
         if conn:
             conn.close()
 
+@app.route("/flights/latest", methods=["GET"])
+def latest_flights():
+    airport = request.args.get("airport")
+
+    if not airport:
+        return jsonify({"error": "Parametro 'airport' mancante"}), 400
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+                   SELECT *
+                   FROM flights
+                   WHERE arrival_airport = %s
+                   ORDER BY date_time_arrival DESC
+                       LIMIT 1;
+                   """, (airport,))
+    latest_arrival = cursor.fetchone()
+
+    cursor.execute("""
+                   SELECT *
+                   FROM flights
+                   WHERE departure_airport = %s
+                   ORDER BY date_time_departure DESC
+                       LIMIT 1;
+                   """, (airport,))
+    latest_departure = cursor.fetchone()
+
+    conn.close()
+
+    return jsonify({
+        "arrival": latest_arrival,
+        "departure": latest_departure
+    }), 200
+
+
+
 if __name__ == "__main__":
     init_db()
 
