@@ -36,15 +36,12 @@ def save_flights_to_db(flights_data, requested_airport):
             arr_ts = flight.get(column_mapping['date_time_arrival'])
             dep_ts = flight.get(column_mapping['date_time_departure'])
 
-            # Se non c'è aeroporto di arrivo -> usare quello richiesto
             if not arr_airport:
                 arr_airport = requested_airport
 
-            # Controlli fondamentali (non scartare più i voli senza arr_airport originale)
             if not flight_id or not arr_ts or not dep_ts:
                 continue
 
-            # Conversione timestamp
             date_time_arrival = datetime.fromtimestamp(arr_ts)
             date_time_departure = datetime.fromtimestamp(dep_ts)
 
@@ -75,20 +72,13 @@ def save_flights_to_db(flights_data, requested_airport):
             conn.close()
 
 
-def get_arrival_flights(airport_icao, access_token):
-    '''
-
-    end_time = int(time.time())
-    begin_time = end_time - (20 * 60)
-
-    '''
-
+def get_flights(airport_icao, access_token, flight_type):
+    """
+    flight_type: 'arrival' oppure 'departure'
+    """
     yesterday = date.today() - timedelta(days=1)
-
     begin_time = int(datetime.combine(yesterday, time.min).timestamp())
-
     end_time = int(datetime.combine(yesterday, time.max).timestamp())
-
 
     params = {
         "airport": airport_icao,
@@ -96,10 +86,8 @@ def get_arrival_flights(airport_icao, access_token):
         "end": end_time
     }
 
-    url = f"{API_ROOT_URL}/flights/arrival"
-    headers = {
-        "Authorization": f"Bearer {access_token}"
-    }
+    url = f"{API_ROOT_URL}/flights/{flight_type}"
+    headers = {"Authorization": f"Bearer {access_token}"}
 
     try:
         response = requests.get(url, params=params, headers=headers, timeout=15)
@@ -111,7 +99,7 @@ def get_arrival_flights(airport_icao, access_token):
         return response.json()
 
     except requests.exceptions.RequestException as e:
-        print(f"Errore nella richiesta per {airport_icao}: {e}")
+        print(f"Errore nella richiesta {flight_type} per {airport_icao}: {e}")
         return []
 
 
@@ -152,14 +140,23 @@ def get_open_sky_data():
     for airport_icao in airports_to_monitor:
         print(f"  > Richiesta dati per {airport_icao}...")
 
-        flights_data = get_arrival_flights(airport_icao, access_token)
 
-        if flights_data:
-            saved_count = save_flights_to_db(flights_data, airport_icao)
+        flights_arr = get_flights(airport_icao, access_token, "arrival")
+        flights_dep = get_flights(airport_icao, access_token, "departure")
 
-            total_saved_flights += saved_count
-        else:
+        has_flights = False
+
+        if flights_arr:
+            total_saved_flights += save_flights_to_db(flights_arr, airport_icao)
+            has_flights = True
+
+        if flights_dep:
+            total_saved_flights += save_flights_to_db(flights_dep, airport_icao)
+            has_flights = True
+
+        if not has_flights:
             print(f"    > Nessun volo trovato o errore per {airport_icao}.")
+
 
     print(f"[{timestamp}] Elaborazione completata. Totale nuovi voli: {total_saved_flights}.")
 
@@ -291,7 +288,7 @@ def list_flights():
         return jsonify(interests), 200
 
     except Error as e:
-        print(f"Errore in list_interests: {e}")
+        print(f"Errore in list_flights: {e}")
         return jsonify({"error": "Errore database"}), 500
 
     finally:
