@@ -333,6 +333,61 @@ def latest_flights():
         "departure": latest_departure
     }), 200
 
+@app.route("/flights/avg", methods=["GET"])
+def flights_average():
+    airport = request.args.get("airport")
+    days = request.args.get("days")
+
+    if not airport or not days:
+        return jsonify({"error": "Parametri 'airport' e 'days' obbligatori"}), 400
+
+    try:
+        days = int(days)
+    except ValueError:
+        return jsonify({"error": "'days' deve essere un numero intero"}), 400
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+                       SELECT COUNT(*)
+                       FROM flights
+                       WHERE arrival_airport = %s
+                         AND date_time_arrival >= NOW() - INTERVAL %s DAY
+                       """, (airport, days))
+        total_arrivals = cursor.fetchone()[0]
+        avg_arrivals = total_arrivals / days if days > 0 else 0
+
+        cursor.execute("""
+                       SELECT COUNT(*)
+                       FROM flights
+                       WHERE departure_airport = %s
+                         AND date_time_departure >= NOW() - INTERVAL %s DAY
+                       """, (airport, days))
+        total_departures = cursor.fetchone()[0]
+        avg_departures = total_departures / days if days > 0 else 0
+
+        conn.close()
+
+        return jsonify({
+            "airport": airport,
+            "days": days,
+            "arrivals": {
+                "total": total_arrivals,
+                "average_per_day": avg_arrivals
+            },
+            "departures": {
+                "total": total_departures,
+                "average_per_day": avg_departures
+            }
+        }), 200
+
+    except Error as e:
+        print("Errore flights-average:", e)
+        return jsonify({"error": "Errore database"}), 500
+
+
 
 
 if __name__ == "__main__":
