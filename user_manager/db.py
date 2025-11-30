@@ -3,7 +3,6 @@ import mysql.connector
 from mysql.connector import Error
 import time
 
-# Parametri (default o docker-compose)
 DB_HOST = os.getenv("DB_HOST", "user-db")
 DB_PORT = int(os.getenv("DB_PORT", "3306"))
 DB_NAME = os.getenv("DB_NAME", "user_db")
@@ -12,9 +11,6 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "user_app_pwd")
 
 
 def get_connection():
-    """
-    Crea una connessione a MySQL.
-    """
     return mysql.connector.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -25,21 +21,12 @@ def get_connection():
 
 
 def init_db():
-    """
-    Crea le tabelle necessarie:
-    - users
-    - request_log
-    """
     conn = None
-
-    # Pausa per permettere a MySQL di avviarsi
-    time.sleep(15)
 
     try:
         conn = get_connection()
         cursor = conn.cursor()
 
-        # Tabella utenti
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -50,7 +37,6 @@ def init_db():
             """
         )
 
-        # Tabella per idempotenza richieste
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS request_log (

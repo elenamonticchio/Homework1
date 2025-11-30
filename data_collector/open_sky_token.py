@@ -5,6 +5,7 @@ import requests
 TOKEN_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
 CLIENT_ID = os.getenv("OPEN_SKY_CLIENT_ID")
 CLIENT_SECRET = os.getenv("OPEN_SKY_CLIENT_SECRET")
+
 CACHED_TOKEN = None
 TOKEN_EXPIRATION_TIME = 0
 
@@ -29,9 +30,7 @@ def get_opensky_token():
             timeout=10
         )
         response.raise_for_status()
-
         return response.json()
-
     except requests.RequestException as e:
         print(f"Errore nella richiesta del token: {e}")
         return None
@@ -46,5 +45,4 @@ def get_token():
             TOKEN_EXPIRATION_TIME = time.time() + token_data.get('expires_in', 1800)
             print("Token aggiornato!")
 
-    print(f"Token attuale: {CACHED_TOKEN}")
     return CACHED_TOKEN

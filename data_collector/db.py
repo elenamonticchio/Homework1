@@ -9,15 +9,10 @@ import time
 DB_HOST = os.getenv("DB_HOST", "data-db")        # default = nome del container MySQL
 DB_PORT = int(os.getenv("DB_PORT", "3306"))      # default = porta interna del container
 DB_NAME = os.getenv("DB_NAME", "data_db")        # default = nome del database
-DB_USER = os.getenv("DB_USER", "user")           # default = utente MySQL
-DB_PASSWORD = os.getenv("DB_PASSWORD", "data_app_pwd")  # default = password dell'utente
-
+DB_USER = os.getenv("DB_USER", "data_user")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "data_app_pwd")
 
 def get_connection():
-    """
-    Ritorna una nuova connessione a MySQL usando le variabili d'ambiente.
-    Se le env non esistono (es. in locale), usa i default sopra.
-    """
     return mysql.connector.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -28,12 +23,8 @@ def get_connection():
 
 
 def init_db():
-    """
-    Crea la tabella 'users' se non esiste.
-    La chiameremo all'avvio dell'app Flask.
-    """
     conn = None
-    time.sleep(15)
+
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -46,7 +37,7 @@ def init_db():
         )
 
         cursor.execute(
-        """ CREATE TABLE flights (
+        """ CREATE TABLE IF NOT EXISTS flights (
              flight_id VARCHAR(255) NOT NULL,
              departure_airport VARCHAR(255),
              arrival_airport VARCHAR(255),
@@ -56,12 +47,8 @@ def init_db():
             );"""
         )
 
-
         conn.commit()
-        time.sleep(3)
-        print("Tabella 'interests' pronta.\n")
-        time.sleep(3)
-        print("Tabella 'flights' pronta.\n")
+        print("Tabelle 'interests' e 'flights' pronte.\n")
 
     except Error as e:
         print(f" Errore durante init_db: {e}")

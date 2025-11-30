@@ -2,8 +2,6 @@ services:
   data-db:
     image: mysql:8.0 # ìmmagine predefinita di docker per mySQL
     container_name: data-db # nome container database per gli aerei
-    ports:
-      - "3306:3306" # mappiamo la porta dell'host (a sinistra) con la porta del container (a destra)
     environment:
       - MYSQL_ROOT_PASSWORD=data_root_pwd # Password
       - MYSQL_DATABASE=data_db
@@ -13,12 +11,16 @@ services:
       - data_db_data:/var/lib/mysql
     networks:
       - data-backend
+    healthcheck:
+      test: [ "CMD-SHELL", "mysqladmin ping -h localhost -u root --password=data_root_pwd" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   user-db:
     image: mysql:8.0
     container_name: user-db
-    ports:
-      - "3307:3306"
     environment:
       - MYSQL_ROOT_PASSWORD=user_root_pwd
       - MYSQL_DATABASE=user_db
@@ -28,6 +30,13 @@ services:
       - user_db_data:/var/lib/mysql
     networks:
       - user-backend
+    healthcheck:
+      test: [ "CMD-SHELL", "mysqladmin ping -h localhost -u root --password=user_root_pwd" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
 
   user-manager:
     build: ./user_manager
@@ -42,10 +51,12 @@ services:
       - DB_PASSWORD=user_app_pwd
       - LISTEN_PORT=5003
     depends_on:
-      - user-db
+      user-db:
+        condition: service_healthy
     networks:
       - user-backend
       - grpc-network
+
 
   data-collector:
     build: ./data_collector
@@ -62,8 +73,10 @@ services:
       - OPEN_SKY_CLIENT_ID=elenamonticchio-api-client
       - OPEN_SKY_CLIENT_SECRET=t23IEaB7UZMJGHMwWK96BQBGXyGO2sPz
     depends_on:
-      - data-db
-      - user-manager
+      data-db:
+        condition: service_healthy
+      user-manager:
+        condition: service_started
     networks:
       - data-backend
       - grpc-network

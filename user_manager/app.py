@@ -24,13 +24,13 @@ def add_user():
         body = request.get_json(silent=True) or {}
         req_id = body.get("request_id")
 
-        cursor.execute("SELECT 1 FROM request_log WHERE request_id = %s", (req_id,))
-        if cursor.fetchone():
-            resp = {
-                "message": "Request ID esistente",
-                "request_id": req_id
-            }
-            return jsonify(resp), 200
+        if not req_id:
+            return jsonify({"error": "request_id obbligatorio"}), 400
+
+        cursor.execute("SELECT response_json FROM request_log WHERE request_id = %s", (req_id,))
+        row = cursor.fetchone()
+        if row:
+            return jsonify(json.loads(row["response_json"])), 200
 
         email = body.get("email")
         full_name = body.get("full_name")
