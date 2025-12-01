@@ -54,6 +54,7 @@ services:
     networks:
       - user-backend
       - grpc-network
+      - api-network
 
   data-collector:
     build: ./data_collector
@@ -77,6 +78,7 @@ services:
     networks:
       - data-backend
       - grpc-network
+      - api-network
 
   api-gateway:
     build: ./api_gateway
@@ -89,12 +91,13 @@ services:
       data-collector:
         condition: service_started
     networks:
-    - grpc-network
+      - api-network
 
 networks:
   data-backend:
   user-backend:
   grpc-network:
+  api-network:
 
 volumes:
   data_db_data:
