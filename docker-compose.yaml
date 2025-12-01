@@ -49,6 +49,7 @@ services:
       DB_USER: ${USER_DB_USER}
       DB_PASSWORD: ${USER_DB_PASSWORD}
       LISTEN_PORT: ${USER_MGR_PORT}
+      GRPC_PORT: ${GRPC_PORT}
     depends_on:
       user-db:
         condition: service_healthy
@@ -70,6 +71,8 @@ services:
       LISTEN_PORT: ${DATA_COL_PORT}
       OPEN_SKY_CLIENT_ID: ${OPEN_SKY_CLIENT_ID}
       OPEN_SKY_CLIENT_SECRET: ${OPEN_SKY_CLIENT_SECRET}
+      USER_MGR_GRPC_HOST: ${USER_MGR_GRPC_HOST}
+      USER_MGR_GRPC_PORT: ${GRPC_PORT}
     depends_on:
       data-db:
         condition: service_healthy

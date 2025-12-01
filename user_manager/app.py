@@ -2,6 +2,7 @@ import os
 from flask import Flask, request, jsonify
 from mysql.connector import Error
 import json
+from grpc_server import start_grpc_server_in_background
 
 from db import get_connection, init_db
 
@@ -147,6 +148,9 @@ def delete_user(email):
 # ---------- RUN SERVER ----------
 if __name__ == "__main__":
     init_db()
+    
+    start_grpc_server_in_background()
+
     listen_port = int(os.getenv("LISTEN_PORT", "5003"))
     app.run(host="0.0.0.0", port=listen_port)
 

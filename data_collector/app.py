@@ -6,6 +6,7 @@ from db import get_connection, init_db
 from open_sky_token import get_token
 from datetime import datetime, date, timedelta, time
 from apscheduler.schedulers.background import BackgroundScheduler
+from user_manager_client import user_exists
 app = Flask(__name__)
 
 API_ROOT_URL = "https://opensky-network.org/api"
@@ -173,6 +174,9 @@ def add_interests():
     if not isinstance(airports, list) or not airports:
         return jsonify({"error": "Il campo 'airports' deve essere una lista non vuota"}), 400
 
+    if not user_exists(email):
+        return jsonify({"error": "Utente inesistente nel User Manager"}), 404
+
     conn = None
     inserted_airports = []
 
@@ -185,7 +189,6 @@ def add_interests():
                 "SELECT airport FROM interests WHERE email = %s AND airport = %s",
                 (email, airport_code)
             )
-
             existing = cursor.fetchone()
 
             if not existing:
@@ -222,6 +225,9 @@ def remove_interests():
 
     if not isinstance(airports, list) or not airports:
         return jsonify({"error": "Il campo 'airports' deve essere una lista non vuota"}), 400
+
+    if not user_exists(email):
+        return jsonify({"error": "Utente inesistente nel User Manager"}), 404
 
     conn = None
 
