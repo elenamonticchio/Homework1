@@ -287,12 +287,29 @@ def list_flights():
     conn = None
 
     try:
+        page = int(request.args.get("page", 1))
+        limit = int(request.args.get("limit", 50))
+        offset = (page - 1) * limit
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM flights")
-        interests = cursor.fetchall()
 
-        return jsonify(interests), 200
+        cursor.execute("SELECT COUNT(*) AS total FROM flights")
+        total = cursor.fetchone()["total"]
+
+        cursor.execute(
+            "SELECT * FROM flights LIMIT %s OFFSET %s",
+            (limit, offset)
+        )
+        flights = cursor.fetchall()
+
+        return jsonify({
+            "page": page,
+            "limit": limit,
+            "count": len(flights),
+            "total": total,
+            "results": flights
+        }), 200
 
     except Error as e:
         print(f"Errore in list_flights: {e}")

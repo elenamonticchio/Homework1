@@ -40,8 +40,6 @@ services:
   user-manager:
     build: ./user_manager
     container_name: user-manager
-    ports:
-      - "${USER_MGR_PORT}:${USER_MGR_PORT}"
     environment:
       DB_HOST: ${USER_MGR_DB_HOST}
       DB_PORT: ${MYSQL_PORT}
@@ -60,8 +58,6 @@ services:
   data-collector:
     build: ./data_collector
     container_name: data-collector
-    ports:
-      - "${DATA_COL_PORT}:${DATA_COL_PORT}"
     environment:
       DB_HOST: ${DATA_COL_DB_HOST}
       DB_PORT: ${MYSQL_PORT}
@@ -81,6 +77,19 @@ services:
     networks:
       - data-backend
       - grpc-network
+
+  api-gateway:
+    build: ./api_gateway
+    container_name: api-gateway
+    ports:
+      - "${API_GTW_PORT}:${API_GTW_PORT}"
+    depends_on:
+      user-manager:
+        condition: service_started
+      data-collector:
+        condition: service_started
+    networks:
+    - grpc-network
 
 networks:
   data-backend:

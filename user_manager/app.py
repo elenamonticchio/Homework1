@@ -8,11 +8,6 @@ from db import get_connection, init_db
 
 app = Flask(__name__)
 
-@app.route("/health", methods=["GET"])
-def health():
-    return jsonify({"status": "ok"}), 200
-
-
 # ---------- REGISTRAZIONE UTENTE CON REQUEST-ID ----------
 @app.route("/users/add", methods=["POST"])
 def add_user():
@@ -148,7 +143,7 @@ def delete_user(email):
 # ---------- RUN SERVER ----------
 if __name__ == "__main__":
     init_db()
-    
+
     start_grpc_server_in_background()
 
     listen_port = int(os.getenv("LISTEN_PORT", "5003"))
