@@ -11,7 +11,7 @@ app = Flask(__name__)
 
 API_ROOT_URL = "https://opensky-network.org/api"
 
-def save_flights_to_db(flights_data, requested_airport, flight_type):
+def save_flights_to_db(flights_data):
     if not flights_data:
         return 0
 
@@ -150,11 +150,11 @@ def get_open_sky_data():
         has_flights = False
 
         if flights_arr:
-            total_saved_flights += save_flights_to_db(flights_arr, airport_icao, "arrival")
+            total_saved_flights += save_flights_to_db(flights_arr)
             has_flights = True
 
         if flights_dep:
-            total_saved_flights += save_flights_to_db(flights_dep, airport_icao, "departure")
+            total_saved_flights += save_flights_to_db(flights_dep)
             has_flights = True
 
         if not has_flights:
