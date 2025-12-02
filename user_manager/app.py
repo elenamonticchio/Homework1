@@ -138,8 +138,6 @@ def delete_user(email):
     finally:
         if conn:
             conn.close()
-
-
 # ---------- RUN SERVER ----------
 if __name__ == "__main__":
     init_db()
