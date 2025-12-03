@@ -319,9 +319,10 @@ def list_flights():
         if conn:
             conn.close()
 
-@app.route("/flights/latest/<email>", methods=["GET"])
-def latest_flights(email):
+@app.route("/flights/latest", methods=["GET"])
+def latest_flights():
     airport = request.args.get("airport")
+    email = request.args.get("email")
 
     if not airport:
         return jsonify({"error": "Parametro 'airport' mancante"}), 400
@@ -329,54 +330,60 @@ def latest_flights(email):
     if not user_exists(email):
         return jsonify({"error": "Utente inesistente nel User Manager"}), 404
 
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
 
-    # Controllo interesse
-    cursor.execute(
-        "SELECT 1 FROM interests WHERE email = %s AND airport = %s",
-        (email, airport)
-    )
-    exists = cursor.fetchone()
+        cursor.execute(
+            "SELECT 1 FROM interests WHERE email = %s AND airport = %s",
+            (email, airport)
+        )
+        exists = cursor.fetchone()
 
-    if not exists:
-        conn.close()
-        return jsonify({"error": "L'aeroporto non è di interesse dell'utente"}), 404
+        if not exists:
+            return jsonify({"error": "L'aeroporto non è di interesse dell'utente"}), 404
 
-    # Ultimo volo in ARRIVO
-    cursor.execute("""
-                   SELECT *
-                   FROM flights
-                   WHERE arrival_airport = %s
-                   ORDER BY date_time_arrival DESC
-                       LIMIT 1;
-                   """, (airport,))
-    latest_arrival = cursor.fetchone()
+        cursor.execute("""
+                       SELECT *
+                       FROM flights
+                       WHERE arrival_airport = %s
+                       ORDER BY date_time_arrival DESC
+                           LIMIT 1;
+                       """, (airport,))
+        latest_arrival = cursor.fetchone()
 
-    # Ultimo volo in PARTENZA
-    cursor.execute("""
-                   SELECT *
-                   FROM flights
-                   WHERE departure_airport = %s
-                   ORDER BY date_time_departure DESC
-                       LIMIT 1;
-                   """, (airport,))
-    latest_departure = cursor.fetchone()
+        cursor.execute("""
+                       SELECT *
+                       FROM flights
+                       WHERE departure_airport = %s
+                       ORDER BY date_time_departure DESC
+                           LIMIT 1;
+                       """, (airport,))
+        latest_departure = cursor.fetchone()
 
-    conn.close()
+        return jsonify({
+            "arrival": latest_arrival,
+            "departure": latest_departure
+        }), 200
 
-    return jsonify({
-        "arrival": latest_arrival,
-        "departure": latest_departure
-    }), 200
+    except Error as db_error:
+        return jsonify({"error": f"Errore database: {db_error}"}), 500
 
+    except Exception as e:
+        return jsonify({"error": f"Errore interno: {e}"}), 500
 
-@app.route("/flights/avg/<email>", methods=["GET"])
-def flights_average(email):
+    finally:
+        if conn:
+            conn.close()
+
+@app.route("/flights/avg", methods=["GET"])
+def flights_average():
     airport = request.args.get("airport")
-    days = request.args.get("days")
+    days = request.args.get("days", "7")
+    email = request.args.get("email")
 
-    if not airport or not days:
+    if not airport or days is None:
         return jsonify({"error": "Parametri 'airport' e 'days' obbligatori"}), 400
 
     if not user_exists(email):
@@ -387,9 +394,11 @@ def flights_average(email):
     except ValueError:
         return jsonify({"error": "'days' deve essere un numero intero"}), 400
 
+    conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
+
         cursor.execute(
             "SELECT 1 FROM interests WHERE email = %s AND airport = %s",
             (email, airport)
@@ -397,7 +406,6 @@ def flights_average(email):
         exists = cursor.fetchone()
 
         if not exists:
-            conn.close()
             return jsonify({"error": "L'aeroporto non è di interesse dell'utente"}), 404
 
         cursor.execute("""
@@ -418,8 +426,6 @@ def flights_average(email):
         total_departures = cursor.fetchone()[0]
         avg_departures = total_departures / days if days > 0 else 0
 
-        conn.close()
-
         return jsonify({
             "airport": airport,
             "days": days,
@@ -437,10 +443,19 @@ def flights_average(email):
         print("Errore flights-average:", e)
         return jsonify({"error": "Errore database"}), 500
 
-@app.route("/flights/stats/<email>", methods=["GET"])
-def flight_stats(email):
+    except Exception as e:
+        print("Errore imprevisto flights-average:", e)
+        return jsonify({"error": f"Errore interno: {e}"}), 500
+
+    finally:
+        if conn:
+            conn.close()
+
+@app.route("/flights/stats", methods=["GET"])
+def flight_stats():
     airport = request.args.get("airport")
     days = request.args.get("days", "7")
+    email = request.args.get("email")
 
     if not airport:
         return jsonify({"error": "Parametro 'airport' obbligatorio"}), 400

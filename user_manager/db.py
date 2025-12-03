@@ -31,8 +31,8 @@ def init_db():
             """
             CREATE TABLE IF NOT EXISTS users (
                 email VARCHAR(255) PRIMARY KEY,
-                full_name VARCHAR(255) NOT NULL,
-                )
+                full_name VARCHAR(255) NOT NULL
+            )
             """
         )
 
@@ -41,7 +41,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS request_log (
                 request_id VARCHAR(255) PRIMARY KEY,
                 response_json TEXT
-                )
+            )
             """
         )
 
