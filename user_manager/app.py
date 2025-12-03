@@ -111,8 +111,12 @@ def list_users():
 
 
 # ---------- CANCELLAZIONE UTENTE ----------
-@app.route("/users/delete/<email>", methods=["DELETE"])
-def delete_user(email):
+@app.route("/users/delete", methods=["DELETE"])
+def delete_user():
+    email = request.args.get("email")
+
+    if not email:
+        return jsonify({"error": "Parametro 'email' mancante"}), 400
 
     conn = None
     try:
@@ -138,6 +142,7 @@ def delete_user(email):
     finally:
         if conn:
             conn.close()
+
 # ---------- RUN SERVER ----------
 if __name__ == "__main__":
     init_db()
