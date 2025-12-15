@@ -15,8 +15,8 @@ services:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root --password=${DATA_DB_ROOT_PASSWORD}"]
       interval: 5s
       timeout: 3s
-      retries: 10
-      start_period: 10s
+      retries: 20
+      start_period: 15s
 
   user-db:
     image: mysql:8.0
@@ -34,8 +34,8 @@ services:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root --password=${USER_DB_ROOT_PASSWORD}"]
       interval: 5s
       timeout: 3s
-      retries: 10
-      start_period: 10s
+      retries: 20
+      start_period: 15s
 
   user-manager:
     build: ./user_manager
@@ -55,6 +55,54 @@ services:
       - user-backend
       - grpc-network
       - api-network
+    # Se hai un endpoint /health sul LISTEN_PORT
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${USER_MGR_PORT}/health').read()\""]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka
+    ports:
+      - "29092:29092"   # host -> broker (test da mac)
+    environment:
+      KAFKA_LOG4J_ROOT_LOGLEVEL: WARN
+      KAFKA_LOG4J_LOGGERS: "org.apache.kafka.image.loader.MetadataLoader=ERROR"
+
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_NODE_ID: 1
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+
+      # --- Listener & advertised ---
+      # 9092: per i container; 29092: per l'host; 29093: controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      # --- Single-node defaults ---
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      # --- Dati ---
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - kafka-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
 
   data-collector:
     build: ./data_collector
@@ -70,15 +118,25 @@ services:
       OPEN_SKY_CLIENT_SECRET: ${OPEN_SKY_CLIENT_SECRET}
       USER_MGR_GRPC_HOST: ${USER_MGR_GRPC_HOST}
       USER_MGR_GRPC_PORT: ${GRPC_PORT}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
     depends_on:
       data-db:
         condition: service_healthy
       user-manager:
-        condition: service_started
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     networks:
       - data-backend
       - grpc-network
       - api-network
+      - kafka-network
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${DATA_COL_PORT}/health').read()\""]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
 
   api-gateway:
     build: ./api_gateway
@@ -87,18 +145,87 @@ services:
       - "${API_GTW_PORT}:${API_GTW_PORT}"
     depends_on:
       user-manager:
-        condition: service_started
+        condition: service_healthy
       data-collector:
-        condition: service_started
+        condition: service_healthy
     networks:
       - api-network
+
+  alert-system:
+    build: ./alert_system
+    container_name: alert-system
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      DATA_DB_HOST: ${DATA_COL_DB_HOST}
+      DATA_DB_NAME: ${DATA_DB_NAME}
+      DATA_DB_USER: ${DATA_DB_USER}
+      DATA_DB_PASSWORD: ${DATA_DB_PASSWORD}
+      KAFKA_TOPIC_IN: ${KAFKA_TOPIC_IN}
+      KAFKA_TOPIC_OUT: ${KAFKA_TOPIC_OUT}
+    networks:
+      - data-backend
+      - kafka-network
+    depends_on:
+      kafka:
+        condition: service_healthy
+      data-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import sys; sys.exit(0)\""]
+      interval: 30s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    networks:
+      - mail-network
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 1025"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+
+  alert-notifier:
+    build: ./alert_notifier
+    container_name: alert-notifier
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      MAIL_FROM: ${MAIL_FROM}
+    networks:
+      - kafka-network
+      - mail-network
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mailhog:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import sys; sys.exit(0)\""]
+      interval: 30s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
 networks:
   data-backend:
   user-backend:
   grpc-network:
   api-network:
+  kafka-network:
+  mail-network:
 
 volumes:
   data_db_data:
   user_db_data:
+  kafka-data:
+

@@ -1,6 +1,7 @@
 import os
 import time
 import requests
+from circuit_breaker import CircuitBreaker, CircuitBreakerOpen
 
 TOKEN_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
 CLIENT_ID = os.getenv("OPEN_SKY_CLIENT_ID")
@@ -8,6 +9,11 @@ CLIENT_SECRET = os.getenv("OPEN_SKY_CLIENT_SECRET")
 
 CACHED_TOKEN = None
 TOKEN_EXPIRATION_TIME = 0
+
+token_circuit_breaker = CircuitBreaker(
+    failure_threshold=3,
+    reset_timeout=60
+)
 
 def is_token_expired():
     return CACHED_TOKEN is None or time.time() >= (TOKEN_EXPIRATION_TIME - 60)
@@ -23,7 +29,8 @@ def get_opensky_token():
     }
 
     try:
-        response = requests.post(
+        response = token_circuit_breaker.call(
+            requests.post,
             TOKEN_URL,
             data=payload,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
@@ -31,6 +38,10 @@ def get_opensky_token():
         )
         response.raise_for_status()
         return response.json()
+
+    except CircuitBreakerOpen:
+        print("Circuit breaker OPEN: richiesta token OpenSky bloccata")
+        return None
     except requests.RequestException as e:
         print(f"Errore nella richiesta del token: {e}")
         return None

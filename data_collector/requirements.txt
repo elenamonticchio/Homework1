@@ -4,3 +4,4 @@ requests
 apscheduler
 grpcio
 protobuf
+confluent-kafka==2.6.0

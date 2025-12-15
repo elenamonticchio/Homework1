@@ -7,9 +7,16 @@ from open_sky_token import get_token
 from datetime import datetime, date, timedelta, time
 from apscheduler.schedulers.background import BackgroundScheduler
 from user_manager_client import user_exists
+from circuit_breaker import CircuitBreaker, CircuitBreakerOpen
+from kafka_producer import publish_flights_update, flush_producer
 app = Flask(__name__)
 
 API_ROOT_URL = "https://opensky-network.org/api"
+
+flights_circuit_breaker = CircuitBreaker(
+    failure_threshold=5,
+    reset_timeout=60
+)
 
 def save_flights_to_db(flights_data):
     if not flights_data:
@@ -94,7 +101,13 @@ def get_flights(airport_icao, access_token, flight_type):
     headers = {"Authorization": f"Bearer {access_token}"}
 
     try:
-        response = requests.get(url, params=params, headers=headers, timeout=15)
+        response = flights_circuit_breaker.call(
+            requests.get,
+            url,
+            params=params,
+            headers=headers,
+            timeout=15
+        )
         response.raise_for_status()
 
         if response.status_code == 204 or response.json() == []:
@@ -102,10 +115,15 @@ def get_flights(airport_icao, access_token, flight_type):
 
         return response.json()
 
+    except CircuitBreakerOpen:
+        print(
+            f"Circuit breaker OPEN: richiesta {flight_type} per {airport_icao} bloccata"
+        )
+        return []
+
     except requests.exceptions.RequestException as e:
         print(f"Errore nella richiesta {flight_type} per {airport_icao}: {e}")
         return []
-
 
 def get_interests():
     conn = None
@@ -147,18 +165,27 @@ def get_open_sky_data():
         flights_arr = get_flights(airport_icao, access_token, "arrival")
         flights_dep = get_flights(airport_icao, access_token, "departure")
 
-        has_flights = False
+        message = {
+            "airport": airport_icao,
+            "arrivals": len(flights_arr or []),
+            "departures": len(flights_dep or []),
+            "timestamp": timestamp
+        }
+        publish_flights_update(message)
 
+        has_flights = False
         if flights_arr:
             total_saved_flights += save_flights_to_db(flights_arr)
             has_flights = True
-
         if flights_dep:
             total_saved_flights += save_flights_to_db(flights_dep)
             has_flights = True
 
         if not has_flights:
             print(f"    > Nessun volo trovato per {airport_icao}.")
+
+    # flush UNA volta sola
+    flush_producer(5)
 
     print(f"[{timestamp}] Elaborazione completata. Totale nuovi voli: {total_saved_flights}.")
 
@@ -767,6 +794,10 @@ def flight_stats():
     finally:
         if conn:
             conn.close()
+
+@app.route("/health", methods=["GET"])
+def health():
+    return {"status": "ok"}, 200
 
 if __name__ == "__main__":
     init_db()

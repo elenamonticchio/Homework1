@@ -143,6 +143,10 @@ def delete_user():
         if conn:
             conn.close()
 
+@app.route("/health", methods=["GET"])
+def health():
+    return {"status": "ok"}, 200
+
 # ---------- RUN SERVER ----------
 if __name__ == "__main__":
     init_db()
