@@ -96,7 +96,7 @@ def list_users():
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("SELECT email, full_name, created_at FROM users")
+        cursor.execute("SELECT email, full_name FROM users")
         users = cursor.fetchall()
 
         return jsonify(users), 200

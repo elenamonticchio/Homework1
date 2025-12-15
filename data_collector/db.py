@@ -32,6 +32,8 @@ def init_db():
         """ CREATE TABLE IF NOT EXISTS interests (
                 email VARCHAR(255),
                 airport VARCHAR(255),
+                high_value INT NULL,
+                low_value INT NULL,
                 PRIMARY KEY (email, airport)
             ) """
         )

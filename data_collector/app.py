@@ -162,6 +162,7 @@ def get_open_sky_data():
 
     print(f"[{timestamp}] Elaborazione completata. Totale nuovi voli: {total_saved_flights}.")
 
+###NEW
 @app.route("/users/add-interests", methods=["POST"])
 def add_interests():
     data = request.get_json(silent=True) or {}
@@ -180,34 +181,220 @@ def add_interests():
     conn = None
     inserted_airports = []
 
+    def _normalize_entry(entry):
+        # Supporta: "LICC" oppure {"airport":"LICC","high_value":120,"low_value":10}
+        if isinstance(entry, str):
+            return entry, None, None
+        if isinstance(entry, dict):
+            return entry.get("airport"), entry.get("high_value"), entry.get("low_value")
+        return None, None, None
+
     try:
         conn = get_connection()
         cursor = conn.cursor()
 
-        for airport_code in airports:
+        for entry in airports:
+            airport_code, high_value, low_value = _normalize_entry(entry)
+
+            if not airport_code or not isinstance(airport_code, str) or not airport_code.strip():
+                return jsonify({"error": "Ogni elemento di 'airports' deve essere una stringa o un oggetto con campo 'airport'"}), 400
+            airport_code = airport_code.strip()
+
+            if high_value is not None and not isinstance(high_value, int):
+                return jsonify({"error": f"high_value deve essere un intero per {airport_code}"}), 400
+            if low_value is not None and not isinstance(low_value, int):
+                return jsonify({"error": f"low_value deve essere un intero per {airport_code}"}), 400
+            if high_value is not None and low_value is not None and high_value <= low_value:
+                return jsonify({"error": f"Per {airport_code}: high_value deve essere > low_value"}), 400
+
             cursor.execute(
-                "SELECT airport FROM interests WHERE email = %s AND airport = %s",
+                "SELECT 1 FROM interests WHERE email = %s AND airport = %s",
                 (email, airport_code)
             )
-            existing = cursor.fetchone()
+            exists = cursor.fetchone() is not None
 
-            if not existing:
+            if not exists:
                 cursor.execute(
-                    "INSERT INTO interests (email, airport) VALUES (%s, %s)",
-                    (email, airport_code),
+                    "INSERT INTO interests (email, airport, high_value, low_value) VALUES (%s, %s, %s, %s)",
+                    (email, airport_code, high_value, low_value)
                 )
                 inserted_airports.append(airport_code)
 
         conn.commit()
 
         return jsonify({
-            "message": "Interessi aggiornati",
+            "message": "Interessi aggiunti",
             "inserted_airports": inserted_airports,
             "total_processed": len(airports)
         }), 201
 
     except Error as e:
         print(f"Errore in add_interests: {e}")
+        return jsonify({"error": "Errore database"}), 500
+
+    finally:
+        if conn:
+            conn.close()
+
+@app.route("/users/update-thresholds", methods=["POST"])
+def add_thresholds():
+    data = request.get_json(silent=True) or {}
+    email = data.get("email")
+    thresholds = data.get("thresholds")
+
+    if not email:
+        return jsonify({"error": "L'email è obbligatoria"}), 400
+
+    if not isinstance(thresholds, list) or not thresholds:
+        return jsonify({"error": "Il campo 'thresholds' deve essere una lista non vuota"}), 400
+
+    if not user_exists(email):
+        return jsonify({"error": "Utente inesistente nel User Manager"}), 404
+
+    conn = None
+    updated = []
+    not_found = []
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        for item in thresholds:
+            if not isinstance(item, dict):
+                return jsonify({"error": "Ogni elemento di 'thresholds' deve essere un oggetto"}), 400
+
+            airport = item.get("airport")
+            high_value = item.get("high_value", None)
+            low_value = item.get("low_value", None)
+
+            if not airport or not isinstance(airport, str) or not airport.strip():
+                return jsonify({"error": "Ogni elemento deve avere 'airport' valido"}), 400
+            airport = airport.strip()
+
+            if high_value is None and low_value is None:
+                return jsonify({"error": f"Per {airport}: devi specificare almeno high_value o low_value"}), 400
+
+            if high_value is not None and not isinstance(high_value, int):
+                return jsonify({"error": f"high_value deve essere un intero per {airport}"}), 400
+            if low_value is not None and not isinstance(low_value, int):
+                return jsonify({"error": f"low_value deve essere un intero per {airport}"}), 400
+            if high_value is not None and low_value is not None and high_value <= low_value:
+                return jsonify({"error": f"Per {airport}: high_value deve essere > low_value"}), 400
+
+            cursor.execute(
+                "SELECT high_value, low_value FROM interests WHERE email = %s AND airport = %s",
+                (email, airport)
+            )
+            row = cursor.fetchone()
+            if not row:
+                not_found.append(airport)
+                continue
+
+            current_high, current_low = row
+
+            new_high = high_value if high_value is not None else current_high
+            new_low = low_value if low_value is not None else current_low
+
+            if new_high is not None and new_low is not None and new_high <= new_low:
+                return jsonify({"error": f"Per {airport}: high_value deve essere > low_value (dopo merge)"}), 400
+
+            cursor.execute(
+                "UPDATE interests SET high_value = %s, low_value = %s WHERE email = %s AND airport = %s",
+                (new_high, new_low, email, airport)
+            )
+            updated.append(airport)
+
+        conn.commit()
+
+        return jsonify({
+            "message": "Soglie aggiunte/aggiornate",
+            "updated_airports": updated,
+            "not_found": not_found,
+            "total_processed": len(thresholds)
+        }), 200
+
+    except Error as e:
+        print(f"Errore in add_thresholds: {e}")
+        return jsonify({"error": "Errore database"}), 500
+
+    finally:
+        if conn:
+            conn.close()
+
+@app.route("/users/remove-thresholds", methods=["POST"])
+def remove_thresholds():
+    data = request.get_json(silent=True) or {}
+    email = data.get("email")
+    thresholds = data.get("thresholds")
+
+    if not email:
+        return jsonify({"error": "L'email è obbligatoria"}), 400
+
+    if not isinstance(thresholds, list) or not thresholds:
+        return jsonify({"error": "Il campo 'thresholds' deve essere una lista non vuota"}), 400
+
+    if not user_exists(email):
+        return jsonify({"error": "Utente inesistente nel User Manager"}), 404
+
+    conn = None
+    updated = []
+    not_found = []
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        for item in thresholds:
+            if not isinstance(item, dict):
+                return jsonify({"error": "Ogni elemento di 'thresholds' deve essere un oggetto"}), 400
+
+            airport = item.get("airport")
+            remove_fields = item.get("remove")
+
+            if not airport or not isinstance(airport, str) or not airport.strip():
+                return jsonify({"error": "Ogni elemento deve avere 'airport' valido"}), 400
+            airport = airport.strip()
+
+            if not isinstance(remove_fields, list) or not remove_fields:
+                return jsonify({"error": f"Per {airport}: il campo 'remove' deve essere una lista non vuota (es. ['high','low'])"}), 400
+
+            remove_set = set(remove_fields)
+            allowed = {"high", "low"}
+            if not remove_set.issubset(allowed):
+                return jsonify({"error": f"Per {airport}: 'remove' può contenere solo 'high' e/o 'low'"}), 400
+
+            cursor.execute(
+                "SELECT 1 FROM interests WHERE email = %s AND airport = %s",
+                (email, airport)
+            )
+            if cursor.fetchone() is None:
+                not_found.append(airport)
+                continue
+
+            sets = []
+            params = []
+            if "high" in remove_set:
+                sets.append("high_value = NULL")
+            if "low" in remove_set:
+                sets.append("low_value = NULL")
+
+            query = f"UPDATE interests SET {', '.join(sets)} WHERE email = %s AND airport = %s"
+            params.extend([email, airport])
+
+            cursor.execute(query, tuple(params))
+            updated.append(airport)
+
+        conn.commit()
+
+        return jsonify({
+            "message": "Soglie rimosse",
+            "updated_airports": updated,
+            "not_found": not_found,
+            "total_processed": len(thresholds)
+        }), 200
+
+    except Error as e:
+        print(f"Errore in remove_thresholds: {e}")
         return jsonify({"error": "Errore database"}), 500
 
     finally:
@@ -261,6 +448,7 @@ def remove_interests():
     finally:
         if conn:
             conn.close()
+###NEW
 
 @app.route("/interests", methods=["GET"])
 def list_interests():
@@ -269,7 +457,7 @@ def list_interests():
     try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT email, airport FROM interests")
+        cursor.execute("SELECT * FROM interests")
         interests = cursor.fetchall()
 
         return jsonify(interests), 200
