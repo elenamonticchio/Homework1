@@ -2,7 +2,8 @@ import time
 import threading
 
 
-class CircuitBreakerOpen(Exception):
+class CircuitBreakerOpenException(Exception):
+    """Raised when the circuit breaker is open (or half-open is saturated)."""
     pass
 
 
@@ -10,82 +11,76 @@ class CircuitBreaker:
     def __init__(
             self,
             failure_threshold: int = 5,
-            reset_timeout: int = 30,
+            recovery_timeout: int = 30,
+            expected_exception=Exception,
             half_open_max_calls: int = 1,
             fallback=None,
     ):
         self.failure_threshold = failure_threshold
-        self.reset_timeout = reset_timeout
+        self.recovery_timeout = recovery_timeout
+        self.expected_exception = expected_exception
         self.half_open_max_calls = half_open_max_calls
         self.fallback = fallback
 
-        self.failures = 0
+        self.failure_count = 0
+        self.last_failure_time = None
         self.state = "CLOSED"
-        self.open_until = 0.0
 
         self._half_open_in_flight = 0
-        self._lock = threading.Lock()
+        self.lock = threading.Lock()
 
-    def _transition_to_open(self):
-        self.state = "OPEN"
-        self.open_until = time.time() + self.reset_timeout
-        self._half_open_in_flight = 0
-
-    def _transition_to_half_open_if_ready(self):
-        if self.state == "OPEN" and time.time() >= self.open_until:
-            self.state = "HALF_OPEN"
-            self._half_open_in_flight = 0
-
-    def _try_acquire_permission(self):
-        """
-        Decide se la chiamata può passare.
-        Ritorna (allowed: bool, state_snapshot: str, half_open_slot_taken: bool)
-        """
-        with self._lock:
-            self._transition_to_half_open_if_ready()
-
+    def call(self, func, *args, **kwargs):
+        with self.lock:
             if self.state == "OPEN":
-                return False, "OPEN", False
+                if self.last_failure_time is not None:
+                    elapsed = time.time() - self.last_failure_time
+                else:
+                    elapsed = 0
+
+                if elapsed >= self.recovery_timeout:
+                    self.state = "HALF_OPEN"
+                    self._half_open_in_flight = 0
+                else:
+                    if self.fallback is not None:
+                        return self.fallback(*args, **kwargs)
+                    raise CircuitBreakerOpenException("Circuit is OPEN. Call denied.")
 
             if self.state == "HALF_OPEN":
                 if self._half_open_in_flight >= self.half_open_max_calls:
-                    return False, "HALF_OPEN", False
+                    if self.fallback is not None:
+                        return self.fallback(*args, **kwargs)
+                    raise CircuitBreakerOpenException("Circuit is HALF_OPEN (no slots). Call denied.")
                 self._half_open_in_flight += 1
-                return True, "HALF_OPEN", True
-
-            return True, "CLOSED", False
-
-    def _release_half_open_slot(self):
-        with self._lock:
-            if self._half_open_in_flight > 0:
-                self._half_open_in_flight -= 1
-
-    def call(self, fn, *args, **kwargs):
-        allowed, state_snapshot, took_slot = self._try_acquire_permission()
-
-        if not allowed:
-            if self.fallback is not None:
-                return self.fallback(*args, **kwargs)
-            raise CircuitBreakerOpen(f"Circuit breaker {state_snapshot}")
+                took_slot = True
+            else:
+                took_slot = False
 
         try:
-            result = fn(*args, **kwargs)
-        except Exception:
-            with self._lock:
+            result = func(*args, **kwargs)
+        except self.expected_exception:
+            with self.lock:
+                self.failure_count += 1
+                self.last_failure_time = time.time()
+
                 if self.state == "HALF_OPEN":
-                    self._transition_to_open()
-                else:
-                    self.failures += 1
-                    if self.failures >= self.failure_threshold:
-                        self._transition_to_open()
+                    self.state = "OPEN"
+                    self._half_open_in_flight = 0
+                elif self.failure_count >= self.failure_threshold:
+                    self.state = "OPEN"
             raise
         else:
-            with self._lock:
-                self.failures = 0
-                self.state = "CLOSED"
-                self.open_until = 0.0
-                self._half_open_in_flight = 0
+            with self.lock:
+                if self.state == "HALF_OPEN":
+                    self.state = "CLOSED"
+                    self.failure_count = 0
+                    self.last_failure_time = None
+                    self._half_open_in_flight = 0
+                else:
+                    self.failure_count = 0
             return result
+
         finally:
             if took_slot:
-                self._release_half_open_slot()
+                with self.lock:
+                    if self._half_open_in_flight > 0:
+                        self._half_open_in_flight -= 1

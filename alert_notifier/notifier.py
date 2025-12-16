@@ -53,7 +53,6 @@ def main():
                 subject, body = build_email(alert)
                 send_email(email, subject, body)
 
-                # commit solo dopo invio -> at-least-once
                 consumer.commit(asynchronous=False)
 
             except Exception as e:

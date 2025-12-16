@@ -88,7 +88,10 @@ def main():
             if msg is None:
                 continue
             if msg.error():
-                print(f"Consumer error: {msg.error()}")
+                if msg.error().code() == KafkaException._PARTITION_EOF:
+                    print(f"End of partition {msg.partition()}")
+                else:
+                    print(f"Consumer error: {msg.error()}")
                 continue
 
             try:
@@ -96,14 +99,12 @@ def main():
                 process_message(data)
                 processed_in_batch += 1
 
-                # Commit “prof-style” a batch
                 if processed_in_batch >= BATCH_SIZE:
                     consumer.commit(asynchronous=False)
                     processed_in_batch = 0
 
             except Exception as e:
                 print(f"Malformed/processing error at offset {msg.offset()}: {e}")
-                # commit per evitare loop infinito su messaggi rotti
                 consumer.commit(asynchronous=False)
 
     except KeyboardInterrupt:

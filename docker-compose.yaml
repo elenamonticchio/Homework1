@@ -55,7 +55,6 @@ services:
       - user-backend
       - grpc-network
       - api-network
-    # Se hai un endpoint /health sul LISTEN_PORT
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${USER_MGR_PORT}/health').read()\""]
       interval: 10s
@@ -67,7 +66,7 @@ services:
     image: confluentinc/cp-kafka:7.4.0
     container_name: kafka
     ports:
-      - "29092:29092"   # host -> broker (test da mac)
+      - "${KAFKA_PORT}:${KAFKA_PORT}"
     environment:
       KAFKA_LOG4J_ROOT_LOGLEVEL: WARN
       KAFKA_LOG4J_LOGGERS: "org.apache.kafka.image.loader.MetadataLoader=ERROR"
@@ -79,22 +78,18 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
 
-      # --- Listener & advertised ---
-      # 9092: per i container; 29092: per l'host; 29093: controller
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
 
-      # --- Single-node defaults ---
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
 
-      # --- Dati ---
       KAFKA_LOG_DIRS: /var/lib/kafka/data
     volumes:
-      - kafka-data:/var/lib/kafka/data
+      - kafka_data:/var/lib/kafka/data
     networks:
       - kafka-network
     healthcheck:
@@ -192,7 +187,6 @@ services:
       retries: 20
       start_period: 5s
 
-
   alert-notifier:
     build: ./alert_notifier
     container_name: alert-notifier
@@ -227,5 +221,5 @@ networks:
 volumes:
   data_db_data:
   user_db_data:
-  kafka-data:
+  kafka_data:
 
