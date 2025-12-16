@@ -7,7 +7,7 @@ from open_sky_token import get_token
 from datetime import datetime, date, timedelta, time
 from apscheduler.schedulers.background import BackgroundScheduler
 from user_manager_client import user_exists
-from circuit_breaker import CircuitBreaker, CircuitBreakerOpen
+from circuit_breaker import CircuitBreaker, CircuitBreakerOpenException
 from kafka_producer import publish_flights_update, flush_producer
 app = Flask(__name__)
 
@@ -15,7 +15,8 @@ API_ROOT_URL = "https://opensky-network.org/api"
 
 flights_circuit_breaker = CircuitBreaker(
     failure_threshold=5,
-    reset_timeout=60
+    recovery_timeout=60,
+    expected_exception=requests.exceptions.RequestException,
 )
 
 def save_flights_to_db(flights_data):
@@ -100,25 +101,30 @@ def get_flights(airport_icao, access_token, flight_type):
     url = f"{API_ROOT_URL}/flights/{flight_type}"
     headers = {"Authorization": f"Bearer {access_token}"}
 
-    try:
-        response = flights_circuit_breaker.call(
-            requests.get,
+    def _do_request():
+        r = requests.get(
             url,
             params=params,
             headers=headers,
             timeout=15
         )
-        response.raise_for_status()
+        r.raise_for_status()
+        return r
 
-        if response.status_code == 204 or response.json() == []:
+    try:
+        response = flights_circuit_breaker.call(_do_request)
+
+        if response.status_code == 204:
             return []
 
-        return response.json()
+        data = response.json()
+        if data == []:
+            return []
 
-    except CircuitBreakerOpen:
-        print(
-            f"Circuit breaker OPEN: richiesta {flight_type} per {airport_icao} bloccata"
-        )
+        return data
+
+    except CircuitBreakerOpenException:
+        print(f"Circuit breaker OPEN: richiesta {flight_type} per {airport_icao} bloccata")
         return []
 
     except requests.exceptions.RequestException as e:

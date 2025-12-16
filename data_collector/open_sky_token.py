@@ -1,7 +1,7 @@
 import os
 import time
 import requests
-from circuit_breaker import CircuitBreaker, CircuitBreakerOpen
+from circuit_breaker import CircuitBreaker, CircuitBreakerOpenException
 
 TOKEN_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
 CLIENT_ID = os.getenv("OPEN_SKY_CLIENT_ID")
@@ -12,7 +12,8 @@ TOKEN_EXPIRATION_TIME = 0
 
 token_circuit_breaker = CircuitBreaker(
     failure_threshold=3,
-    reset_timeout=60
+    recovery_timeout=60,
+    expected_exception=requests.exceptions.RequestException,
 )
 
 def is_token_expired():
@@ -28,21 +29,25 @@ def get_opensky_token():
         "client_secret": CLIENT_SECRET,
     }
 
-    try:
-        response = token_circuit_breaker.call(
-            requests.post,
+    def _do_request():
+        r = requests.post(
             TOKEN_URL,
             data=payload,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             timeout=10
         )
-        response.raise_for_status()
+        r.raise_for_status()
+        return r
+
+    try:
+        response = token_circuit_breaker.call(_do_request)
         return response.json()
 
-    except CircuitBreakerOpen:
+    except CircuitBreakerOpenException:
         print("Circuit breaker OPEN: richiesta token OpenSky bloccata")
         return None
-    except requests.RequestException as e:
+
+    except requests.exceptions.RequestException as e:
         print(f"Errore nella richiesta del token: {e}")
         return None
 
@@ -51,9 +56,9 @@ def get_token():
 
     if is_token_expired():
         token_data = get_opensky_token()
-        if token_data and 'access_token' in token_data:
-            CACHED_TOKEN = token_data['access_token']
-            TOKEN_EXPIRATION_TIME = time.time() + token_data.get('expires_in', 1800)
+        if token_data and "access_token" in token_data:
+            CACHED_TOKEN = token_data["access_token"]
+            TOKEN_EXPIRATION_TIME = time.time() + token_data.get("expires_in", 1800)
             print("Token aggiornato!")
 
     return CACHED_TOKEN
