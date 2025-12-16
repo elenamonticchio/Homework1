@@ -1,5 +1,5 @@
 import os, json, time
-from confluent_kafka import Consumer, Producer, KafkaException
+from confluent_kafka import Consumer, Producer, KafkaError
 from db import get_connection
 
 BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
@@ -87,10 +87,9 @@ def main():
 
             if msg is None:
                 continue
+
             if msg.error():
-                if msg.error().code() == KafkaException._PARTITION_EOF:
-                    print(f"End of partition {msg.partition()}")
-                else:
+                if msg.error().code() != KafkaError._PARTITION_EOF:
                     print(f"Consumer error: {msg.error()}")
                 continue
 
