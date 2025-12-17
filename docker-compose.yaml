@@ -168,21 +168,6 @@ services:
       data-db:
         condition: service_healthy
 
-  mailhog:
-    image: mailhog/mailhog:latest
-    container_name: mailhog
-    ports:
-      - "8025:8025"
-      - "1025:1025"
-    networks:
-      - mail-network
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 1025"]
-      interval: 10s
-      timeout: 3s
-      retries: 20
-      start_period: 5s
-
   alert-notifier:
     build: ./alert_notifier
     container_name: alert-notifier
@@ -190,14 +175,14 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
       MAIL_FROM: ${MAIL_FROM}
+      MAIL_TO: ${MAIL_FROM}
     networks:
       - kafka-network
-      - mail-network
     depends_on:
       kafka:
-        condition: service_healthy
-      mailhog:
         condition: service_healthy
 
 networks:
@@ -206,7 +191,6 @@ networks:
   grpc-network:
   api-network:
   kafka-network:
-  mail-network:
 
 volumes:
   data_db_data:
