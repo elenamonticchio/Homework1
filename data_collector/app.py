@@ -171,26 +171,28 @@ def get_open_sky_data():
         flights_arr = get_flights(airport_icao, access_token, "arrival")
         flights_dep = get_flights(airport_icao, access_token, "departure")
 
+        saved_arr = 0
+        saved_dep = 0
+
+        if flights_arr:
+            saved_arr = save_flights_to_db(flights_arr)
+            total_saved_flights += saved_arr
+
+        if flights_dep:
+            saved_dep = save_flights_to_db(flights_dep)
+            total_saved_flights += saved_dep
+
         message = {
             "airport": airport_icao,
-            "arrivals": len(flights_arr or []),
-            "departures": len(flights_dep or []),
+            "arrivals": saved_arr,
+            "departures": saved_dep,
             "timestamp": timestamp
         }
         publish_flights_update(message)
 
-        has_flights = False
-        if flights_arr:
-            total_saved_flights += save_flights_to_db(flights_arr)
-            has_flights = True
-        if flights_dep:
-            total_saved_flights += save_flights_to_db(flights_dep)
-            has_flights = True
-
-        if not has_flights:
+        if not flights_arr and not flights_dep:
             print(f"    > Nessun volo trovato per {airport_icao}.")
 
-    # flush UNA volta sola
     flush_producer(5)
 
     print(f"[{timestamp}] Elaborazione completata. Totale nuovi voli: {total_saved_flights}.")
