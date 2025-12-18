@@ -114,7 +114,8 @@ services:
       OPEN_SKY_CLIENT_SECRET: ${OPEN_SKY_CLIENT_SECRET}
       USER_MGR_GRPC_HOST: ${USER_MGR_GRPC_HOST}
       USER_MGR_GRPC_PORT: ${GRPC_PORT}
-      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      KAFKA_BOOTSTRAP_SERVERS:
+      KAFKA_TOPIC_FLIGHTS: ${KAFKA_TOPIC_IN}
     depends_on:
       data-db:
         condition: service_healthy
@@ -167,8 +168,6 @@ services:
         condition: service_healthy
       data-db:
         condition: service_healthy
-      alert-notifier:
-        condition: service_healthy
 
   alert-notifier:
     build: ./alert_notifier
@@ -180,17 +179,12 @@ services:
       SMTP_USER: ${SMTP_USER}
       SMTP_PASS: ${SMTP_PASS}
       MAIL_FROM: ${MAIL_FROM}
+      KAFKA_TOPIC_OUT: ${KAFKA_TOPIC_OUT}
     networks:
       - kafka-network
     depends_on:
       kafka:
         condition: service_healthy
-    healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import sys; sys.exit(0)\"" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
 
 networks:
   data-backend:

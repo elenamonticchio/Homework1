@@ -10,8 +10,7 @@ consumer_conf = {
     "bootstrap.servers": BOOTSTRAP,
     "group.id": "alert-system",
     "auto.offset.reset": "latest",
-    "enable.auto.commit": False,
-    "max.poll.interval.ms": 300000
+    "enable.auto.commit": False
 }
 
 producer_conf = {
