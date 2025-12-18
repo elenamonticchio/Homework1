@@ -65,7 +65,7 @@ def process_message(message: dict):
                 "high_value": int(high_value),
                 "timestamp": timestamp
             })
-        if low_value is not None and value < int(low_value):
+        if low_value is not None and value != 0 and value < int(low_value):
             publish_alert({
                 "email": email,
                 "airport": airport,
