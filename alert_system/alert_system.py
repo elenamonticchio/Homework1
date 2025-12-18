@@ -9,7 +9,7 @@ TOPIC_OUT = os.getenv("KAFKA_TOPIC_OUT", "to-notifier")
 consumer_conf = {
     "bootstrap.servers": BOOTSTRAP,
     "group.id": "alert-system",
-    "auto.offset.reset": "earliest",
+    "auto.offset.reset": "latest",
     "enable.auto.commit": False,
     "max.poll.interval.ms": 300000
 }
@@ -86,6 +86,10 @@ def main():
             msg = consumer.poll(1.0)
 
             if msg is None:
+                if processed_in_batch > 0:
+                    producer.flush(5)
+                    consumer.commit(asynchronous=False)
+                    processed_in_batch = 0
                 continue
 
             if msg.error():
@@ -99,18 +103,25 @@ def main():
                 processed_in_batch += 1
 
                 if processed_in_batch >= BATCH_SIZE:
+                    producer.flush(5)
                     consumer.commit(asynchronous=False)
                     processed_in_batch = 0
 
-            except Exception as e:
-                print(f"Malformed/processing error at offset {msg.offset()}: {e}")
+            except json.JSONDecodeError as e:
+                print(f"Malformed JSON at offset {msg.offset()}: {e}")
                 consumer.commit(asynchronous=False)
+
+            except Exception as e:
+                print(f"Processing error at offset {msg.offset()}: {e}")
+                time.sleep(1)
 
     except KeyboardInterrupt:
         pass
+
     finally:
         if processed_in_batch > 0:
             try:
+                producer.flush(10)
                 consumer.commit(asynchronous=False)
             except Exception as e:
                 print("Commit finale fallito:", e)

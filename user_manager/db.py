@@ -21,6 +21,8 @@ def get_connection():
 
 
 def init_db():
+    print("Attendo 15 secondi per l'avvio del database...")
+    time.sleep(15)
     conn = None
 
     try:

@@ -8,7 +8,7 @@ TOPIC = os.getenv("KAFKA_TOPIC_OUT", "to-notifier")
 consumer_conf = {
     "bootstrap.servers": BOOTSTRAP,
     "group.id": "alert-notifier",
-    "auto.offset.reset": "earliest",
+    "auto.offset.reset": "latest",
     "enable.auto.commit": False
 }
 
