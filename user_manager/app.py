@@ -3,10 +3,26 @@ from flask import Flask, request, jsonify
 from mysql.connector import Error
 import json
 from grpc_server import start_grpc_server_in_background
-
+import socket
+import time
+import prometheus_client
 from db import get_connection, init_db
-
 app = Flask(__name__)
+
+SERVICE_NAME = "user_manager"
+NODE_NAME = socket.gethostname()
+
+USERS_CREATED_TOTAL = prometheus_client.Counter(
+    'users_created_total',
+    'Numero totale di utenti registrati correttamente',
+    ['service', 'node']
+)
+
+USERS_LIST_LATENCY = prometheus_client.Gauge(
+    'users_list_latency_seconds',
+    'Tempo di risposta della lista utenti',
+    ['service', 'node']
+)
 
 # ---------- REGISTRAZIONE UTENTE CON REQUEST-ID ----------
 @app.route("/users/add", methods=["POST"])
@@ -65,6 +81,8 @@ def add_user():
         )
         conn.commit()
 
+        USERS_CREATED_TOTAL.labels(service=SERVICE_NAME, node=NODE_NAME).inc()
+
         resp = {
             "message": "Utente inserito correttamente",
             "email": email,
@@ -91,13 +109,16 @@ def add_user():
 # ---------- LISTA UTENTI ----------
 @app.route("/users", methods=["GET"])
 def list_users():
+    start_time = time.time()
     conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
-
         cursor.execute("SELECT email, full_name FROM users")
         users = cursor.fetchall()
+
+        duration = time.time() - start_time
+        USERS_LIST_LATENCY.labels(service=SERVICE_NAME, node=NODE_NAME).set(duration)
 
         return jsonify(users), 200
 
@@ -150,6 +171,9 @@ def health():
 # ---------- RUN SERVER ----------
 if __name__ == "__main__":
     init_db()
+
+    prometheus_client.start_http_server(9992)
+    print(f"Prometheus metrics disponibili sulla porta 9992")
 
     start_grpc_server_in_background()
 

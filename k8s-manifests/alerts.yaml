@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alert-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: alert-system }
+  template:
+    metadata:
+      labels: { app: alert-system }
+    spec:
+      containers:
+        - name: alert-system
+          image: alert-system:latest
+          imagePullPolicy: Never
+          envFrom:
+            - configMapRef: { name: app-config }
+          env:
+            - name: DATA_DB_HOST
+              valueFrom: { configMapKeyRef: { name: app-config, key: DATA_COL_DB_HOST } }
+            - name: DATA_DB_USER
+              valueFrom: { secretKeyRef: { name: app-secrets, key: DATA_DB_USER } }
+            - name: DATA_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: app-secrets, key: DATA_DB_PASSWORD } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alert-notifier
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: alert-notifier }
+  template:
+    metadata:
+      labels: { app: alert-notifier }
+    spec:
+      containers:
+        - name: alert-notifier
+          image: alert-notifier:latest
+          imagePullPolicy: Never
+          envFrom:
+            - configMapRef: { name: app-config }
+          env:
+            - name: SMTP_USER
+              valueFrom: { secretKeyRef: { name: app-secrets, key: SMTP_USER } }
+            - name: SMTP_PASS
+              valueFrom: { secretKeyRef: { name: app-secrets, key: SMTP_PASS } }
+            - name: MAIL_FROM
+              valueFrom: { secretKeyRef: { name: app-secrets, key: MAIL_FROM } }

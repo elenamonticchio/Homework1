@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'data_collector'
+    static_configs:
+      - targets: ['data-collector:9991']
+  - job_name: 'user_manager'
+    static_configs:
+      - targets: ['user-manager:9992']

@@ -186,6 +186,19 @@ services:
       kafka:
         condition: service_healthy
 
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yaml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.external-url=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - api-network
+
 networks:
   data-backend:
   user-backend:
@@ -197,4 +210,6 @@ volumes:
   data_db_data:
   user_db_data:
   kafka_data:
+  prometheus_data: { }
+
 

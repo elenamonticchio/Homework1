@@ -1,17 +1,36 @@
 import os
+import socket
+import time
 from flask import Flask, request, jsonify
 import requests
 from mysql.connector import Error
 from db import get_connection, init_db
 from open_sky_token import get_token
-from datetime import datetime, date, timedelta, time
+from datetime import datetime, date, timedelta, time as dt_time
 from apscheduler.schedulers.background import BackgroundScheduler
 from user_manager_client import user_exists
 from circuit_breaker import CircuitBreaker, CircuitBreakerOpenException
 from kafka_producer import publish_flights_update, flush_producer
+import prometheus_client
+
 app = Flask(__name__)
 
 API_ROOT_URL = "https://opensky-network.org/api"
+
+SERVICE_NAME = "data_collector"
+NODE_NAME = socket.gethostname()
+
+FLIGHTS_TOTAL = prometheus_client.Counter(
+    'flights_inserted_total',
+    'Numero totale di voli inseriti nel database',
+    ['service', 'node']
+)
+
+OPENSKY_DURATION = prometheus_client.Gauge(
+    'opensky_processing_duration_seconds',
+    'Tempo impiegato per l\'ultimo aggiornamento dati',
+    ['service', 'node']
+)
 
 flights_circuit_breaker = CircuitBreaker(
     failure_threshold=5,
@@ -60,7 +79,7 @@ def save_flights_to_db(flights_data):
             query = """
                     INSERT IGNORE INTO flights (
                     flight_id, departure_airport, arrival_airport, date_time_arrival, date_time_departure
-                ) VALUES (%s, %s, %s, %s, %s) 
+                ) VALUES (%s, %s, %s, %s, %s) \
                     """
             values = (
                 flight_id,
@@ -89,8 +108,10 @@ def get_flights(airport_icao, access_token, flight_type):
     flight_type: 'arrival' oppure 'departure'
     """
     yesterday = date.today() - timedelta(days=1)
-    begin_time = int(datetime.combine(yesterday, time.min).timestamp())
-    end_time = int(datetime.combine(yesterday, time.max).timestamp())
+
+    # QUI usiamo dt_time invece di time per riferirci a mezzanotte/fine giornata
+    begin_time = int(datetime.combine(yesterday, dt_time.min).timestamp())
+    end_time = int(datetime.combine(yesterday, dt_time.max).timestamp())
 
     params = {
         "airport": airport_icao,
@@ -150,6 +171,8 @@ def get_interests():
 
 
 def get_open_sky_data():
+    # Ora time.time() funziona perché ci riferiamo al modulo importato in alto
+    start_time = time.time()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     access_token = get_token()
@@ -177,10 +200,14 @@ def get_open_sky_data():
         if flights_arr:
             saved_arr = save_flights_to_db(flights_arr)
             total_saved_flights += saved_arr
+            # INCREMENTO PROMETHEUS QUI
+            FLIGHTS_TOTAL.labels(service=SERVICE_NAME, node=NODE_NAME).inc(saved_arr)
 
         if flights_dep:
             saved_dep = save_flights_to_db(flights_dep)
             total_saved_flights += saved_dep
+            # INCREMENTO PROMETHEUS QUI
+            FLIGHTS_TOTAL.labels(service=SERVICE_NAME, node=NODE_NAME).inc(saved_dep)
 
         message = {
             "airport": airport_icao,
@@ -195,9 +222,12 @@ def get_open_sky_data():
 
     flush_producer(5)
 
+    duration = time.time() - start_time
+    OPENSKY_DURATION.labels(service=SERVICE_NAME, node=NODE_NAME).set(duration)
+
     print(f"[{timestamp}] Elaborazione completata. Totale nuovi voli: {total_saved_flights}.")
 
-###NEW
+### NEW ENDPOINTS (Interests & Thresholds)
 @app.route("/users/add-interests", methods=["POST"])
 def add_interests():
     data = request.get_json(silent=True) or {}
@@ -217,7 +247,6 @@ def add_interests():
     inserted_airports = []
 
     def _normalize_entry(entry):
-        # Supporta: "LICC" oppure {"airport":"LICC","high_value":120,"low_value":10}
         if isinstance(entry, str):
             return entry, None, None
         if isinstance(entry, dict):
@@ -483,7 +512,7 @@ def remove_interests():
     finally:
         if conn:
             conn.close()
-###NEW
+
 
 @app.route("/interests", methods=["GET"])
 def list_interests():
@@ -809,6 +838,10 @@ def health():
 
 if __name__ == "__main__":
     init_db()
+
+    # Avvio il server delle metriche
+    prometheus_client.start_http_server(9991)
+    print(f"Prometheus metrics disponibili sulla porta 9991")
 
     scheduler = BackgroundScheduler()
 

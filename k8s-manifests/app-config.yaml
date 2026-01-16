@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  # Database Names
+  DATA_DB_NAME: "data_db"
+  USER_DB_NAME: "user_db"
+  # Hosts
+  USER_MGR_DB_HOST: "user-db"
+  USER_MGR_GRPC_HOST: "user-manager"
+  DATA_COL_DB_HOST: "data-db"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  SMTP_HOST: "smtp.gmail.com"
+  # Ports
+  USER_MGR_PORT: "5003"
+  DATA_COL_PORT: "5002"
+  API_GTW_PORT: "8000"
+  MYSQL_PORT: "3306"
+  GRPC_PORT: "50051"
+  SMTP_PORT: "587"
+  # Kafka Topics
+  KAFKA_TOPIC_IN: "to-alert-system"
+  KAFKA_TOPIC_OUT: "to-notifier"
