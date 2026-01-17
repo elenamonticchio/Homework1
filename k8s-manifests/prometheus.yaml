@@ -48,10 +48,10 @@ spec:
         - name: prometheus
           image: prom/prometheus:latest
           args:
-            - "--config.file=/etc/prometheus/prometheus.yaml"
-            - "--storage.tsdb.path=/prometheus"
-            - "--web.external-url=/prometheus"
-            - "--web.route-prefix=/"
+            - '--config.file=/etc/prometheus/prometheus.yaml'
+            - '--storage.tsdb.path=/prometheus'
+            - '--web.external-url=/prometheus'
+            - '--web.enable-lifecycle'
           ports:
             - containerPort: 9090
           volumeMounts:

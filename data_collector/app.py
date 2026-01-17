@@ -836,6 +836,15 @@ def flight_stats():
 def health():
     return {"status": "ok"}, 200
 
+@app.route("/debug/force-update", methods=["POST"])
+def force_update():
+    print("[DEBUG] Ricevuto comando di aggiornamento forzato OpenSky...")
+    get_open_sky_data()
+    return jsonify({
+        "status": "success",
+        "message": "Aggiornamento OpenSky completato e messaggi inviati a Kafka"
+    }), 200
+
 if __name__ == "__main__":
     init_db()
 
