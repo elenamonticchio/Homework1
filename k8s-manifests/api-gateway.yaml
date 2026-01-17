@@ -10,12 +10,27 @@ spec:
     metadata:
       labels: { app: api-gateway }
     spec:
+      initContainers:
+        - name: wait-for-services
+          image: busybox:1.28
+          command:
+            - 'sh'
+            - '-c'
+            - >
+              until nc -z user-manager 5003; do echo waiting for user-manager; sleep 2; done;
+              until nc -z data-collector 5002; do echo waiting for data-collector; sleep 2; done;
+              until nc -z prometheus 9090; do echo waiting for prometheus; sleep 2; done;
       containers:
         - name: api-gateway
           image: api-gateway:latest
           imagePullPolicy: Never
           ports:
             - containerPort: 8000
+          livenessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service

@@ -10,6 +10,10 @@ spec:
     metadata:
       labels: { app: user-manager, monitor: prometheus }
     spec:
+      initContainers:
+        - name: wait-for-user-db
+          image: busybox:1.28
+          command: [ 'sh', '-c', "until nc -z user-db 3306; do echo waiting for user-db; sleep 2; done" ]
       containers:
         - name: user-manager
           image: user-manager:latest
@@ -27,6 +31,18 @@ spec:
             - containerPort: 5003
             - containerPort: 50051
             - containerPort: 9992
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5003
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+              httpGet:
+                path: /health
+                port: 5003
+              initialDelaySeconds: 10
+              periodSeconds: 5
 ---
 apiVersion: v1
 kind: Service

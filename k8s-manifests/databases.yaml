@@ -39,6 +39,16 @@ spec:
               valueFrom: { secretKeyRef: { name: app-secrets, key: USER_DB_PASSWORD } }
           ports:
             - containerPort: 3306
+          livenessProbe:
+            tcpSocket:
+              port: 3306
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+              tcpSocket:
+                port: 3306
+              initialDelaySeconds: 10
+              periodSeconds: 5
           volumeMounts:
             - name: mysql-storage
               mountPath: /var/lib/mysql
@@ -92,6 +102,16 @@ spec:
               valueFrom: { secretKeyRef: { name: app-secrets, key: DATA_DB_PASSWORD } }
           ports:
             - containerPort: 3306
+          livenessProbe:
+            tcpSocket:
+              port: 3306
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+              tcpSocket:
+                port: 3306
+              initialDelaySeconds: 10
+              periodSeconds: 5
           volumeMounts:
             - name: mysql-storage
               mountPath: /var/lib/mysql

@@ -3,46 +3,74 @@ kind: ConfigMap
 metadata:
   name: prometheus-config
 data:
-  prometheus.yml: |     
+  prometheus.yaml: | 
     global:
       scrape_interval: 15s
     scrape_configs:
       - job_name: 'data_collector'
         static_configs:
-          - targets: [ 'data-collector:9991' ]
+          - targets: ['data-collector:9991']
       - job_name: 'user_manager'
         static_configs:
-          - targets: [ 'user-manager:9992' ]
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: prometheus
-spec:
-  replicas: 1
-  selector:
-    matchLabels: { app: prometheus }
-  template:
-    metadata:
-      labels: { app: prometheus }
-    spec:
-      containers:
-        - name: prometheus
-          image: prom/prometheus:latest
-          args: ["--config.file=/etc/prometheus/prometheus.yml"]
-          ports:
-            - containerPort: 9090
-          volumeMounts:
-            - name: config
-              mountPath: /etc/prometheus
-      volumes:
-        - name: config
-          configMap: { name: prometheus-config }
+          - targets: ['user-manager:9992']
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: prometheus
+  labels:
+    app: prometheus
 spec:
-  selector: { app: prometheus }
-  ports: [{ port: 9090 }]
+  ports:
+    - port: 9090
+      targetPort: 9090
+      name: web
+  selector:
+    app: prometheus
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: prometheus
+spec:
+  serviceName: "prometheus"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:latest
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yaml"
+            - "--storage.tsdb.path=/prometheus"
+            - "--web.external-url=/prometheus"
+            - "--web.route-prefix=/"
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: prometheus-data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+            items:
+              - key: prometheus.yaml
+                path: prometheus.yaml
+  volumeClaimTemplates:
+    - metadata:
+        name: prometheus-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 2Gi

@@ -10,6 +10,16 @@ spec:
     metadata:
       labels: { app: data-collector, monitor: prometheus }
     spec:
+      initContainers:
+        - name: wait-for-dependencies
+          image: busybox:1.28
+          command:
+            - 'sh'
+            - '-c'
+            - >
+              until nc -z data-db 3306; do echo waiting for data-db; sleep 2; done;
+              until nc -z kafka 9092; do echo waiting for kafka; sleep 2; done;
+              until nc -z user-manager 50051; do echo waiting for user-manager grpc; sleep 2; done;
       containers:
         - name: data-collector
           image: data-collector:latest
@@ -30,6 +40,18 @@ spec:
           ports:
             - containerPort: 5002
             - containerPort: 9991
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5002
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+              httpGet:
+                path: /health
+                port: 5002
+              initialDelaySeconds: 10
+              periodSeconds: 5
 ---
 apiVersion: v1
 kind: Service
