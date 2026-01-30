@@ -9,6 +9,10 @@ spec:
   template:
     metadata:
       labels: { app: user-manager, monitor: prometheus }
+      annotations:
+          prometheus.io/scrape: "true"
+          prometheus.io/port: "9992"
+          prometheus.io/path: "/metrics"
     spec:
       initContainers:
         - name: wait-for-user-db

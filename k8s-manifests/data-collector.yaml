@@ -9,6 +9,10 @@ spec:
   template:
     metadata:
       labels: { app: data-collector, monitor: prometheus }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9991"
+        prometheus.io/path: "/metrics"
     spec:
       initContainers:
         - name: wait-for-dependencies

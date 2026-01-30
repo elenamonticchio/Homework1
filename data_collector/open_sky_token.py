@@ -60,5 +60,6 @@ def get_token():
             CACHED_TOKEN = token_data["access_token"]
             TOKEN_EXPIRATION_TIME = time.time() + token_data.get("expires_in", 1800)
             print("Token aggiornato!")
+            print(CACHED_TOKEN)
 
     return CACHED_TOKEN
