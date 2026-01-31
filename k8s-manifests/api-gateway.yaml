@@ -19,7 +19,6 @@ spec:
             - >
               until nc -z user-manager 5003; do echo waiting for user-manager; sleep 2; done;
               until nc -z data-collector 5002; do echo waiting for data-collector; sleep 2; done;
-              until nc -z prometheus 9090; do echo waiting for prometheus; sleep 2; done;
       containers:
         - name: api-gateway
           image: api-gateway:latest
