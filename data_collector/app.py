@@ -12,7 +12,6 @@ from user_manager_client import user_exists
 from circuit_breaker import CircuitBreaker, CircuitBreakerOpenException
 from kafka_producer import publish_flights_update, flush_producer
 import prometheus_client
-
 app = Flask(__name__)
 
 API_ROOT_URL = "https://opensky-network.org/api"
@@ -109,7 +108,6 @@ def get_flights(airport_icao, access_token, flight_type):
     """
     yesterday = date.today() - timedelta(days=1)
 
-    # QUI usiamo dt_time invece di time per riferirci a mezzanotte/fine giornata
     begin_time = int(datetime.combine(yesterday, dt_time.min).timestamp())
     end_time = int(datetime.combine(yesterday, dt_time.max).timestamp())
 
@@ -171,7 +169,6 @@ def get_interests():
 
 
 def get_open_sky_data():
-    # Ora time.time() funziona perché ci riferiamo al modulo importato in alto
     start_time = time.time()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -200,13 +197,13 @@ def get_open_sky_data():
         if flights_arr:
             saved_arr = save_flights_to_db(flights_arr)
             total_saved_flights += saved_arr
-            # INCREMENTO PROMETHEUS QUI
+
             FLIGHTS_TOTAL.labels(service=SERVICE_NAME, node=NODE_NAME).inc(saved_arr)
 
         if flights_dep:
             saved_dep = save_flights_to_db(flights_dep)
             total_saved_flights += saved_dep
-            # INCREMENTO PROMETHEUS QUI
+
             FLIGHTS_TOTAL.labels(service=SERVICE_NAME, node=NODE_NAME).inc(saved_dep)
 
         message = {
@@ -836,14 +833,25 @@ def flight_stats():
 def health():
     return {"status": "ok"}, 200
 
-@app.route("/debug/force-update", methods=["POST"])
-def force_update():
-    print("[DEBUG] Ricevuto comando di aggiornamento forzato OpenSky...")
+@app.route("/debug/reset-and-force-update", methods=["POST"])
+def debug_reset_and_force_update():
+    print("[DEBUG] Reset tabella flights e aggiornamento OpenSky")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM flights")
+    conn.commit()
+    conn.close()
+
+    print("[DEBUG] Tabella flights resettata correttamente")
+
     get_open_sky_data()
+
     return jsonify({
         "status": "success",
-        "message": "Aggiornamento OpenSky completato e messaggi inviati a Kafka"
+        "message": "DB flights resettato e OpenSky forzato"
     }), 200
+
 
 if __name__ == "__main__":
     init_db()
