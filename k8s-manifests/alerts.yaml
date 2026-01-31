@@ -11,14 +11,21 @@ spec:
       labels: { app: alert-system }
     spec:
       initContainers:
-        - name: wait-for-deps
-          image: busybox:1.28
+        - name: wait-for-deps-and-topics
+          image: confluentinc/cp-kafka:7.4.0
           command:
-            - 'sh'
-            - '-c'
-            - >
-              until nc -z data-db 3306; do echo waiting for data-db; sleep 2; done;
-              until nc -z kafka 9092; do echo waiting for kafka; sleep 2; done;
+            - sh
+            - -c
+            - |
+              set -e
+
+              until nc -z data-db 3306; do sleep 2; done
+              until nc -z kafka 9092; do sleep 2; done
+
+              until kafka-topics --bootstrap-server kafka:9092 \
+                --list | grep -w to-alert-system; do
+                sleep 2
+              done
       containers:
         - name: alert-system
           image: alert-system:latest
@@ -46,9 +53,20 @@ spec:
       labels: { app: alert-notifier }
     spec:
       initContainers:
-        - name: wait-for-kafka
-          image: busybox:1.28
-          command: [ 'sh', '-c', "until nc -z kafka 9092; do echo waiting for kafka; sleep 2; done" ]
+        - name: wait-for-kafka-and-topics
+          image: confluentinc/cp-kafka:7.4.0
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+
+              until nc -z kafka 9092; do sleep 2; done
+
+              until kafka-topics --bootstrap-server kafka:9092 \
+                --list | grep -w to-notifier; do
+                sleep 2
+              done
       containers:
         - name: alert-notifier
           image: alert-notifier:latest
