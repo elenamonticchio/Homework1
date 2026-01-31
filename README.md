@@ -1,20 +1,34 @@
-# Build & Deploy – Istruzioni operative
+# Progetto Distributed Systems & Big Data
 
-## 1. Prerequisiti specifici del progetto
-Per l’esecuzione sono necessari:
+Questo progetto implementa un sistema distribuito basato su **microservizi**, **Kafka**, **MySQL**, **gRPC** e **REST**, con **monitoring white-box tramite Prometheus** e **deployment su Kubernetes**.
 
-- File `.env` con tutte le variabili richieste da `docker-compose.yaml`.
-- Accesso a Internet per le chiamate all’API OpenSky.
-- Le directory dei servizi devono mantenere la seguente struttura minima:
+Sono disponibili **due modalità di esecuzione**:
 
-```
-/user_manager
-/data_collector
-/api_gateway
-docker-compose.yaml
-```
+- **Docker Compose** (sviluppo locale)
+- **Kubernetes (kind)** (deployment completo)
 
-## 2. Configurazione obbligatoria del file `.env`
+---
+
+## Requisiti
+
+### Per Docker Compose
+
+- Docker
+- Docker Compose
+
+### Per Kubernetes
+
+- Docker
+- kubectl
+- kind (Kubernetes in Docker)
+
+---
+
+## Variabili d’ambiente
+
+Il progetto usa **ConfigMap** e **Secret** in Kubernetes e un file `.env` per Docker Compose.
+
+### Per Docker
 
 Creare un file `.env` nella root del progetto con le seguenti variabili:
 
@@ -65,22 +79,152 @@ KAFKA_TOPIC_OUT=to-notifier
 KAFKA_TOPIC_FLIGHTS=to-alert-system
 ```
 
-## 3. Uso dell’API Gateway (porta 8000)
+### Per Kubernetes
 
-Tutte le chiamate REST passano attraverso l’API Gateway Nginx configurato in `nginx.conf` .
+Creare un file `app-secrets.yaml` nella cartella k8s-manifests del progetto con la seguente struttura:
 
-Esempi di endpoint disponibili:
+```
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+type: Opaque
+stringData:
+  # Data DB Secrets
+  DATA_DB_ROOT_PASSWORD: "..."
+  DATA_DB_USER: "..."
+  DATA_DB_PASSWORD: "..."
+  # User DB Secrets
+  USER_DB_ROOT_PASSWORD: "..."
+  USER_DB_USER: "..."
+  USER_DB_PASSWORD: "..."
+  # Credentials
+  OPEN_SKY_CLIENT_ID: "..."
+  OPEN_SKY_CLIENT_SECRET: "..."
+  SMTP_USER: "..."
+  SMTP_PASS: "..."
+  MAIL_FROM: "..."
 
-* `/users`, `/users/add`, ... → inoltrati a **user-manager**
-* `/interests`, `/flights`, `/users/add-interests`, ... → inoltrati a **data-collector**
-
-Esempio:
-
-```bash
-curl http://localhost:8000/users
 ```
 
-## 4. Note operative utili per questo progetto
-- I database richiedono qualche secondo per diventare healthy.
-- Le chiamate che usano OpenSky richiedono credenziali valide.
-- Tutti gli accessi REST devono passare dall’API Gateway.
+---
+
+## Esecuzione con Docker Compose
+
+Modalità consigliata per **sviluppo locale**.
+
+### Build e avvio
+
+```bash
+docker compose build
+docker compose up
+```
+
+Docker Compose gestisce:
+
+- ordine di avvio tramite `depends_on`
+- healthcheck sui servizi critici
+- persistenza dati con volumi
+
+Configurazione completa in `docker-compose.yaml`
+
+---
+
+## Esecuzione con Kubernetes (kind)
+
+### 1. Creazione cluster kind
+
+```bash
+kind create cluster --config kind-config.yaml
+```
+
+Il cluster:
+
+- 1 control-plane + 2 worker
+- NodePort esposto su `localhost:80`
+
+Configurazione in `kind-config.yaml`
+
+
+### 2. Build delle immagini Docker
+
+Le immagini sono usate **localmente** dal cluster (`imagePullPolicy: Never`).
+
+```bash
+docker build -t user-manager:latest ./user_manager
+docker build -t data-collector:latest ./data_collector
+docker build -t api-gateway:latest ./api_gateway
+docker build -t alert-system:latest ./alert_system
+docker build -t alert-notifier:latest ./alert_notifier
+```
+
+Caricamento immagini nel cluster kind:
+
+```bash
+kind load docker-image user-manager:latest
+kind load docker-image data-collector:latest
+kind load docker-image api-gateway:latest
+kind load docker-image alert-system:latest
+kind load docker-image alert-notifier:latest
+```
+
+### 3. Deploy su Kubernetes
+
+È possibile applicare **tutti i manifest insieme**, grazie a:
+
+- init containers
+- readiness probe
+- job di inizializzazione Kafka
+
+```bash
+kubectl apply -f k8s-manifests/
+```
+
+---
+
+### 4. Accesso ai servizi
+
+**API Gateway**
+
+* Per Docker
+
+  ```
+  http://localhost:8000
+  ```
+
+* Per Kubernetes
+
+  ```
+  http://localhost
+  ```
+
+
+---
+
+## Monitoring con Prometheus
+
+* Per Docker
+  ```
+  http://localhost:8000/prometheus/
+  ```
+
+* Per Kubernetes
+
+  ```
+  http://localhost/prometheus/
+  ```
+
+---
+
+## Kafka e gestione dei topic
+
+I topic Kafka vengono creati automaticamente tramite **Job Kubernetes**:
+
+- `to-alert-system`
+- `to-notifier`
+
+
+Gestione garantita da:
+
+- Job `kafka-init-topics`
+- Init container nei consumer
