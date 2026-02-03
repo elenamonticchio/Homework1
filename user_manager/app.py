@@ -24,7 +24,6 @@ USERS_LIST_LATENCY = prometheus_client.Gauge(
     ['service', 'node']
 )
 
-# ---------- REGISTRAZIONE UTENTE CON REQUEST-ID ----------
 @app.route("/users/add", methods=["POST"])
 def add_user():
     conn = None
@@ -106,7 +105,6 @@ def add_user():
             conn.close()
 
 
-# ---------- LISTA UTENTI ----------
 @app.route("/users", methods=["GET"])
 def list_users():
     start_time = time.time()
@@ -131,7 +129,6 @@ def list_users():
             conn.close()
 
 
-# ---------- CANCELLAZIONE UTENTE ----------
 @app.route("/users/delete", methods=["DELETE"])
 def delete_user():
     email = request.args.get("email")
@@ -168,7 +165,6 @@ def delete_user():
 def health():
     return {"status": "ok"}, 200
 
-# ---------- RUN SERVER ----------
 if __name__ == "__main__":
     init_db()
 

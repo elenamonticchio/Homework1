@@ -109,7 +109,6 @@ def get_flights(airport_icao, access_token, flight_type):
     """
     yesterday = date.today() - timedelta(days=1)
 
-    # QUI usiamo dt_time invece di time per riferirci a mezzanotte/fine giornata
     begin_time = int(datetime.combine(yesterday, dt_time.min).timestamp())
     end_time = int(datetime.combine(yesterday, dt_time.max).timestamp())
 
@@ -171,7 +170,6 @@ def get_interests():
 
 
 def get_open_sky_data():
-    # Ora time.time() funziona perché ci riferiamo al modulo importato in alto
     start_time = time.time()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -200,13 +198,11 @@ def get_open_sky_data():
         if flights_arr:
             saved_arr = save_flights_to_db(flights_arr)
             total_saved_flights += saved_arr
-            # INCREMENTO PROMETHEUS QUI
             FLIGHTS_TOTAL.labels(service=SERVICE_NAME, node=NODE_NAME).inc(saved_arr)
 
         if flights_dep:
             saved_dep = save_flights_to_db(flights_dep)
             total_saved_flights += saved_dep
-            # INCREMENTO PROMETHEUS QUI
             FLIGHTS_TOTAL.labels(service=SERVICE_NAME, node=NODE_NAME).inc(saved_dep)
 
         message = {
@@ -227,7 +223,6 @@ def get_open_sky_data():
 
     print(f"[{timestamp}] Elaborazione completata. Totale nuovi voli: {total_saved_flights}.")
 
-### NEW ENDPOINTS (Interests & Thresholds)
 @app.route("/users/add-interests", methods=["POST"])
 def add_interests():
     data = request.get_json(silent=True) or {}
@@ -848,7 +843,6 @@ def force_update():
 if __name__ == "__main__":
     init_db()
 
-    # Avvio il server delle metriche
     prometheus_client.start_http_server(9991)
     print(f"Prometheus metrics disponibili sulla porta 9991")
 

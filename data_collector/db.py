@@ -3,12 +3,10 @@ import mysql.connector
 from mysql.connector import Error
 import time
 
-# Leggo i parametri dal docker-compose, ma metto anche un DEFAULT
-# così il codice funziona anche se lanciato fuori da Docker.
 
-DB_HOST = os.getenv("DB_HOST", "data-db")        # default = nome del container MySQL
-DB_PORT = int(os.getenv("DB_PORT", "3306"))      # default = porta interna del container
-DB_NAME = os.getenv("DB_NAME", "data_db")        # default = nome del database
+DB_HOST = os.getenv("DB_HOST", "data-db")
+DB_PORT = int(os.getenv("DB_PORT", "3306"))
+DB_NAME = os.getenv("DB_NAME", "data_db")
 DB_USER = os.getenv("DB_USER", "data_user")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "data_app_pwd")
 
